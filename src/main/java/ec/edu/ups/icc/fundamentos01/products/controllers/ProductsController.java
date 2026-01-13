@@ -2,6 +2,7 @@ package ec.edu.ups.icc.fundamentos01.products.controllers;
 
 import java.util.List;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -14,7 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.PartialUpdateProductDto;
+import ec.edu.ups.icc.fundamentos01.products.dtos.SecureUpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
+import ec.edu.ups.icc.fundamentos01.products.dtos.ValidateProductNameDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 
 import ec.edu.ups.icc.fundamentos01.products.services.ProductService;
@@ -50,14 +53,25 @@ public class ProductsController {
         return productService.update(id, dto);
     }
 
-
     @PatchMapping("/{id}")
     public ProductResponseDto partialUpdate(@PathVariable("id") int id, @RequestBody PartialUpdateProductDto dto) {
         return productService.partialUpdate(id, dto);
-    }   
+    }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable("id") int id) {
         productService.delete(id);
+    }
+
+    @PostMapping("/validate-name")
+    public ResponseEntity<Boolean> validateName(@RequestBody ValidateProductNameDto dto) {
+        productService.validateName(dto.id, dto.name);
+        return ResponseEntity.ok(true);
+
+    }
+
+    @PutMapping("/{id}/secure-update")
+    public ProductResponseDto secureUpdate(@PathVariable("id") int id, @RequestBody SecureUpdateProductDto dto) {
+        return productService.secureUpdate(id, dto);
     }
 }
