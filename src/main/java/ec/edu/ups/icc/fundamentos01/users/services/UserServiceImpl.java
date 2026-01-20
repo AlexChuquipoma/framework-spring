@@ -1,16 +1,18 @@
 package ec.edu.ups.icc.fundamentos01.users.services;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
 import ec.edu.ups.icc.fundamentos01.exceptions.domain.NotFoundException;
+import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
+import ec.edu.ups.icc.fundamentos01.products.mappers.ProductMapper;
+import ec.edu.ups.icc.fundamentos01.products.models.Product;
+import ec.edu.ups.icc.fundamentos01.products.repository.ProductRepository;
 import ec.edu.ups.icc.fundamentos01.users.dtos.CreateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.PartialUpdateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UpdateUserDto;
 import ec.edu.ups.icc.fundamentos01.users.dtos.UserResponseDto;
-
 import ec.edu.ups.icc.fundamentos01.users.mappers.UserMapper;
 import ec.edu.ups.icc.fundamentos01.users.models.User;
 import ec.edu.ups.icc.fundamentos01.users.models.UserEntity;
@@ -19,9 +21,11 @@ import ec.edu.ups.icc.fundamentos01.users.repository.UserRepository;
 @Service
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepo;
+    private final ProductRepository productRepo;
 
-    public UserServiceImpl(UserRepository userRepo) {
+    public UserServiceImpl(UserRepository userRepo, ProductRepository productRepo) {
         this.userRepo = userRepo;
+        this.productRepo = productRepo;
     }
 
     @Override
@@ -36,11 +40,9 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserResponseDto findOne(int id) {
         return userRepo.findById((long) id)
-            .map(User::fromEntity)
-            .map(UserMapper::toResponse)
-            .orElseThrow(() ->
-                new NotFoundException("Usuario no encontrado")
-            );
+                .map(User::fromEntity)
+                .map(UserMapper::toResponse)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
     }
 
     @Override
@@ -57,7 +59,6 @@ public class UserServiceImpl implements UserService {
 
         return UserMapper.toResponse(User.fromEntity(saved));
 
-      
     }
 
     @Override
@@ -134,6 +135,21 @@ public class UserServiceImpl implements UserService {
                         () -> {
                             throw new IllegalStateException("Usuario no encontrado");
                         });
+    }
+
+    @Override
+    public List<ProductResponseDto> getProductsByUserId(Long userId) {
+        // Verificar que el usuario existe
+        if (!userRepo.existsById(userId)) {
+            throw new NotFoundException("Usuario no encontrado");
+        }
+
+        // Consultar productos del usuario usando el repositorio de productos
+        return productRepo.findByOwnerId(userId)
+                .stream()
+                .map(Product::fromEntity) // Entity → Domain
+                .map(ProductMapper::toResponse) // Domain → DTO
+                .toList();
     }
 
 }

@@ -54,6 +54,23 @@ public class ProductEntity extends BaseModel {
     public ProductEntity() {
     }
 
+    // ============== MÉTODOS DE CONVENIENCIA ==============
+    /**
+     * Remueve una categoría del producto y sincroniza la relación bidireccional
+     */
+    public void removeCategory(CategoryEntity category) {
+        this.categories.remove(category);
+
+    }
+
+    /**
+     * Limpia todas las categorías y sincroniza las relaciones
+     */
+    public void clearCategories() {
+        // Luego limpiar la colección local
+        this.categories.clear();
+    }
+
     public String getName() {
         return name;
     }
@@ -96,28 +113,7 @@ public class ProductEntity extends BaseModel {
 
     public void addCategory(CategoryEntity category) {
         this.categories.add(category);
-        // category.getProducts().add(this); // Sincroniza el otro lado
-    }
 
-    /**
-     * Remueve una categoría del producto y sincroniza la relación bidireccional
-     */
-    public void removeCategory(CategoryEntity category) {
-        this.categories.remove(category);
-        // category.getProducts().remove(this); // Sincroniza el otro lado
     }
-
-    /**
-     * Limpia todas las categorías y sincroniza las relaciones
-     */
-    public void clearCategories() {
-        // Primero remover de cada categoría
-        for (CategoryEntity category : new HashSet<>(this.categories)) {
-            // category.getProducts().remove(this);
-        }
-        // Luego limpiar la colección local
-        this.categories.clear();
-    }
-    // ... resto
 
 }

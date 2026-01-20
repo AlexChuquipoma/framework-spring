@@ -44,79 +44,16 @@ public class ProductServiceImpl implements ProductService {
     public List<ProductResponseDto> findAll() {
         return productRepo.findAll()
                 .stream()
-                .map(this::toResponseDto)
+                .map(Product::fromEntity) // ProductEntity → Product
+                .map(Product::toResponseDto) // Product → ProductResponseDto
                 .toList();
     }
 
     @Override
-    public ProductResponseDto findOne(Long id) {
-        return productRepo.findById((long) id)
-                .map(Product::fromEntity)
-                .map(ProductMapper::toResponse)
-                .orElseThrow(() -> new IllegalStateException("Producto no encontrado"));
-    }
-
-    @Override
-    public ProductResponseDto create(CreateProductDto dto) {
-        // 1. VALIDAR EXISTENCIA DE RELACIONES
-        UserEntity owner = userRepo.findById(dto.userId)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado con ID: " + dto.userId));
-
-        // CategoryEntity category = categoryRepo.findById(dto.categoryId)
-        // .orElseThrow(() -> new NotFoundException("Categoría no encontrada con ID: " +
-        // dto.categoryId));
-
-        // 2. VALIDAR Y OBTENER CATEGORÍAS
-        Set<CategoryEntity> categories = validateAndGetCategories(dto.categoryIds);
-
-        // Regla: nombre único
-        if (productRepo.findByName(dto.name).isPresent()) {
-            throw new IllegalStateException("El nombre del producto ya está registrado");
-        }
-
-        // 2. CREAR MODELO DE DOMINIO
-        Product product = Product.fromDto(dto);
-
-        // 3. CONVERTIR A ENTIDAD CON RELACIONES
-        ProductEntity entity = product.toEntity(owner);
-        entity.setCategories(categories);
-
-        // 4. PERSISTIR
-        ProductEntity saved = productRepo.save(entity);
-
-        // 5. CONVERTIR A DTO DE RESPUESTA
-        return toResponseDto(saved);
-    }
-
-    @Override
-    public ProductResponseDto update(Long id, UpdateProductDto dto) {
-        // 1. BUSCAR PRODUCTO EXISTENTE
-        ProductEntity existing = productRepo.findById(id)
+    public ProductResponseDto findById(Long id) {
+        return productRepo.findById(id)
+                .map(this::toResponseDto)
                 .orElseThrow(() -> new NotFoundException("Producto no encontrado con ID: " + id));
-
-        // 2. VALIDAR NUEVA CATEGORÍA (si cambió)
-        // CategoryEntity newCategory = categoryRepo.findById(dto.categoryId)
-        // .orElseThrow(() -> new NotFoundException("Categoría no encontrada con ID: " +
-        // dto.categoryId));
-
-        Set<CategoryEntity> categories = validateAndGetCategories(dto.categoryIds);
-
-        // 3. ACTUALIZAR USANDO DOMINIO
-        Product product = Product.fromEntity(existing);
-        product.update(dto);
-
-        // 4. CONVERTIR A ENTIDAD MANTENIENDO OWNER ORIGINAL
-        ProductEntity updated = product.toEntity(existing.getOwner());
-        updated.setId(id); // Asegurar que mantiene el ID
-
-        updated.clearCategories();
-        for (CategoryEntity category : categories) {
-            updated.addCategory(category);
-        }
-
-        // 5. PERSISTIR Y RESPONDER
-        ProductEntity saved = productRepo.save(updated);
-        return toResponseDto(saved);
     }
 
     @Override
@@ -136,159 +73,126 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public List<ProductResponseDto> findByCategoryId(Long categoryId) {
 
-        // // Validar que la categoría existe
-        // if (!categoryRepo.existsById(categoryId)) {
-        // throw new NotFoundException("Categoría no encontrada con ID: " + categoryId);
-        // }
+        // Validar que la categoría existe
+        if (!categoryRepo.existsById(categoryId)) {
+            throw new NotFoundException("Categoría no encontrada con ID: " + categoryId);
+        }
 
-        // return productRepo.findByCategoryId(categoryId)
-        // .stream()
-        // .map(this::toResponseDto)
-        // .toList();
-
-        return null;
+        return productRepo.findByCategoryId(categoryId)
+                .stream()
+                .map(this::toResponseDto)
+                .toList();
     }
 
     @Override
-    public ProductResponseDto partialUpdate(Long id, PartialUpdateProductDto dto) {
+    public ProductResponseDto create(CreateProductDto dto) {
 
-        // 1. BUSCAR PRODUCTO EXISTENTE
+        // 1. VALIDAR USER
+        UserEntity owner = userRepo.findById(dto.userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+
+        // 2. VALIDAR Y OBTENER CATEGORÍAS
+        Set<CategoryEntity> categories = validateAndGetCategories(dto.categoryIds);
+
+        // 3. CREAR DOMINIO
+        Product product = Product.fromDto(dto);
+
+        // 4. CREAR ENTIDAD CON RELACIONES N:N
+        ProductEntity entity = product.toEntity(owner);
+        entity.setCategories(categories);
+
+        // 5. PERSISTIR
+        ProductEntity saved = productRepo.save(entity);
+
+        return toResponseDto(saved);
+    }
+
+    @Override
+    public ProductResponseDto update(Long id, UpdateProductDto dto) {
+
         ProductEntity existing = productRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Producto no encontrado con ID: " + id));
+                .orElseThrow(() -> new NotFoundException("Producto no encontrado"));
 
-        // 2. VALIDAR NUEVA CATEGORÍA
-        Set<CategoryEntity> categoriaEntities = validateAndGetCategories(dto.categoryIds);
+        // Validar nuevas categorías
+        Set<CategoryEntity> newCategories = validateAndGetCategories(dto.categoryIds);
+
+        // Actualizar usando dominio
+        Product product = Product.fromEntity(existing);
+        product.update(dto);
 
         // 3. ACTUALIZAR USANDO Instancia de entidad
         existing.setDescription(dto.description != null ? dto.description : existing.getDescription());
         existing.setName(dto.name != null ? dto.name : existing.getName());
         existing.setPrice(dto.price != null ? dto.price : existing.getPrice());
 
+        // IMPORTANTE: Limpiar categorías existentes y asignar nuevas
         existing.clearCategories();
+        existing.setCategories(newCategories);
 
-        existing.setCategories(categoriaEntities);
-        // 5. PERSISTIR Y RESPONDER
         ProductEntity saved = productRepo.save(existing);
-
         return toResponseDto(saved);
     }
 
     @Override
     public void delete(Long id) {
 
-        // Verifica existencia y elimina
-        productRepo.findById((long) id)
-                .ifPresentOrElse(
-                        productRepo::delete,
-                        () -> {
-                            throw new IllegalStateException("Producto no encontrado");
-                        });
+        ProductEntity product = productRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Producto no encontrado con ID: " + id));
+
+        // Eliminación física (también se puede implementar lógica)
+        productRepo.delete(product);
     }
-
-    @Override
-    public boolean validateName(Integer id, String name) {
-        productRepo.findByName(name)
-                .ifPresent(existing -> {
-                    if (id == null || existing.getId() != id.longValue()) {
-                        throw new ConflictException(
-                                "Ya existe un producto con el nombre '" + name + "'");
-                    }
-                });
-        return true;
-    }
-
-    @Override
-    public ProductResponseDto secureUpdate(int id, SecureUpdateProductDto dto) {
-
-        UserEntity owner = userRepo.findById(dto.userId)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado con ID: " + dto.userId));
-
-        // CategoryEntity category = categoryRepo.findById(dto.categoryId)
-        // .orElseThrow(() -> new NotFoundException("Categoría no encontrada con ID: " +
-        // dto.categoryId));
-
-        Set<CategoryEntity> categories = validateAndGetCategories(dto.categoryIds);
-
-        ProductEntity entity = productRepo.findById((long) id)
-                .orElseThrow(() -> new BusinessException("Producto no encontrado"));
-
-        if (dto.price != null && dto.price > 1000) {
-            if (dto.reason == null || dto.reason.isBlank()) {
-                throw new BusinessException(
-                        "Productos con precio mayor a 1000 requieren justificación");
-            }
-        }
-
-        Product product = Product.fromEntity(entity);
-
-        if (dto.name != null)
-            product.setName(dto.name);
-        if (dto.price != null)
-            product.setPrice(dto.price);
-        if (dto.description != null)
-            product.setDescription(dto.description);
-
-        ProductEntity saved = productRepo.save(product.toEntity(owner));
-
-        return ProductMapper.toResponse(Product.fromEntity(saved));
-    }
+    // ============== MÉTODOS HELPER ==============
 
     /**
-     * Convierte ProductEntity a ProductResponseDto
-     * Usa estructura anidada para mejor organización semántica
+     * Convierte ProductEntity a DTO incluyendo categorías (N:N)
+     * Usa estructura anidada para mejor semántica
      */
     private ProductResponseDto toResponseDto(ProductEntity entity) {
         ProductResponseDto dto = new ProductResponseDto();
 
-        // Campos básicos del producto
+        // Campos básicos
         dto.id = entity.getId();
         dto.name = entity.getName();
         dto.price = entity.getPrice();
         dto.description = entity.getDescription();
 
-        // Crear objeto User anidado (se carga LAZY)
+        // Crear objeto User anidado
         ProductResponseDto.UserSummaryDto userDto = new ProductResponseDto.UserSummaryDto();
         userDto.id = entity.getOwner().getId();
         userDto.name = entity.getOwner().getName();
         userDto.email = entity.getOwner().getEmail();
         dto.user = userDto;
 
-        // Crear objeto Category anidado (se carga LAZY)
+        // Convertir Set<CategoryEntity> a List<CategoryResponseDto>
+        dto.categories = entity.getCategories().stream()
+                .map(this::toCategorySummary)
+                .sorted((c1, c2) -> c1.name.compareTo(c2.name)) // Ordenar por nombre
+                .toList();
 
-        List<CategoryResponseDto> categories = new ArrayList<>();
-        for (CategoryEntity categoryEntity : entity.getCategories()) {
-            CategoryResponseDto categoryDto = new CategoryResponseDto();
-            categoryDto.id = categoryEntity.getId();
-            categoryDto.name = categoryEntity.getName();
-            categoryDto.description = categoryEntity.getDescription();
-            categories.add(categoryDto);
-        }
-
-        dto.categories = categories;
-        // Auditoría
         dto.createdAt = entity.getCreatedAt();
         dto.updatedAt = entity.getUpdatedAt();
 
         return dto;
     }
 
+    private CategoryResponseDto toCategorySummary(CategoryEntity category) {
+        CategoryResponseDto summary = new CategoryResponseDto();
+        summary.id = category.getId();
+        summary.name = category.getName();
+        summary.description = category.getDescription();
+        return summary;
+    }
+
+    // ============== MÉTODOS HELPER ==============
+
     private Set<CategoryEntity> validateAndGetCategories(Set<Long> categoryIds) {
+        Set<CategoryEntity> categories = new HashSet<>();
 
-        // Set<CategoryEntity> categories = new HashSet<>();
-
-        // for (Long categoryId : categoryIds) {
-        // CategoryEntity category = categoryRepo.findById(categoryId)
-        // .orElseThrow(() -> new NotFoundException("Categoría no encontrada: " +
-        // categoryId));
-        // categories.add(category);
-        // }
-
-        // return categories;
-
-        Set<CategoryEntity> categories = new HashSet<>(categoryRepo.findAllById(categoryIds));
-
-        if (categories.size() != categoryIds.size()) {
-            throw new NotFoundException("Una o más categorías no existen");
+        for (Long categoryId : categoryIds) {
+            CategoryEntity category = categoryRepo.findById(categoryId)
+                    .orElseThrow(() -> new NotFoundException("Categoría no encontrada: " + categoryId));
+            categories.add(category);
         }
 
         return categories;
