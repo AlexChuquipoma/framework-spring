@@ -27,7 +27,7 @@ public class CategoryMapper {
                 id = categoryEntity.getId();
                 name = categoryEntity.getName();
                 description = categoryEntity.getDescription();
-                products = productsDTO;
+                // products = productsDTO;
 
             }
         };
