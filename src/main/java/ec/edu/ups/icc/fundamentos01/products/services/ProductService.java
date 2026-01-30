@@ -9,6 +9,7 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
 
 import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 
 public interface ProductService {
 
@@ -24,9 +25,9 @@ public interface ProductService {
 
     List<ProductResponseDto> findByCategoryId(Long id);
 
-    ProductResponseDto update(Long id, UpdateProductDto dto);
+    ProductResponseDto update(Long id, UpdateProductDto dto, UserDetailsImpl currentUser);
 
-    void delete(Long id);
+    void delete(Long id, UserDetailsImpl currentUser);
 
     // ============== MÉTODOS CON PAGINACIÓN ==============
 

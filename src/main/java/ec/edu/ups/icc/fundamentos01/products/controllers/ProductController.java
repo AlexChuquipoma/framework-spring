@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.RestController;
 
 import ec.edu.ups.icc.fundamentos01.products.dtos.CreateProductDto;
@@ -24,6 +26,7 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.UpdateProductDto;
 import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 
 import ec.edu.ups.icc.fundamentos01.products.services.ProductService;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 import jakarta.validation.Valid;
 
 @RestController
@@ -42,14 +45,27 @@ public class ProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    // ============== ENDPOINTS DE CONSULTA ==============
+
+    /**
+     * Listar TODOS los productos (sin paginación) - SOLO ADMIN
+     * GET /api/products
+     */
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ProductResponseDto>> findAll() {
+        List<ProductResponseDto> products = productService.findAll();
+        return ResponseEntity.ok(products);
+    }
+
     // ============== PAGINACIÓN BÁSICA ==============
 
     /**
      * Lista todos los productos con paginación básica
-     * Ejemplo: GET /api/products?page=0&size=10&sort=name,asc
+     * Ejemplo: GET /api/products/paginated?page=0&size=10&sort=name,asc
      */
-    @GetMapping
-    public ResponseEntity<Page<ProductResponseDto>> findAll(
+    @GetMapping("/paginated")
+    public ResponseEntity<Page<ProductResponseDto>> findAllPaginado(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id") String[] sort) {
@@ -136,14 +152,17 @@ public class ProductController {
     @PutMapping("/{id}")
     public ResponseEntity<ProductResponseDto> update(
             @PathVariable("id") Long id,
-            @Valid @RequestBody UpdateProductDto dto) {
-        ProductResponseDto updated = productService.update(id, dto);
+            @Valid @RequestBody UpdateProductDto dto,
+            @AuthenticationPrincipal UserDetailsImpl currentUser) {
+        ProductResponseDto updated = productService.update(id, dto, currentUser);
         return ResponseEntity.ok(updated);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
-        productService.delete(id);
+    public ResponseEntity<Void> delete(
+            @PathVariable("id") Long id,
+            @AuthenticationPrincipal UserDetailsImpl currentUser) {
+        productService.delete(id, currentUser);
         return ResponseEntity.noContent().build();
     }
 }

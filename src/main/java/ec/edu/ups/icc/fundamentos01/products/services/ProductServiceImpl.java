@@ -10,7 +10,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import ec.edu.ups.icc.fundamentos01.categories.dtos.CategoryResponseDto;
 import ec.edu.ups.icc.fundamentos01.categories.entity.CategoryEntity;
@@ -25,6 +28,7 @@ import ec.edu.ups.icc.fundamentos01.products.dtos.ProductResponseDto;
 import ec.edu.ups.icc.fundamentos01.products.models.Product;
 import ec.edu.ups.icc.fundamentos01.products.models.ProductEntity;
 import ec.edu.ups.icc.fundamentos01.products.repository.ProductRepository;
+import ec.edu.ups.icc.fundamentos01.security.services.UserDetailsImpl;
 import ec.edu.ups.icc.fundamentos01.users.models.UserEntity;
 import ec.edu.ups.icc.fundamentos01.users.repository.UserRepository;
 
@@ -119,33 +123,41 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public ProductResponseDto update(Long id, UpdateProductDto dto) {
+    @Transactional
+    public ProductResponseDto update(Long id, UpdateProductDto dto, UserDetailsImpl currentUser) {
 
         // 1. BUSCAR PRODUCTO EXISTENTE
         ProductEntity existing = productRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("Producto no encontrado con ID: " + id));
 
-        // 2. VALIDAR Y OBTENER CATEGORÍAS
+        // 2. VALIDACIÓN DE OWNERSHIP
+        validateOwnership(existing, currentUser);
+
+        // 3. VALIDAR Y OBTENER CATEGORÍAS
         Set<CategoryEntity> categories = validateAndGetCategories(dto.categoryIds);
 
-        // 3. ACTUALIZAR USANDO DOMINIO
+        // 4. ACTUALIZAR USANDO DOMINIO
         Product product = Product.fromEntity(existing);
         product.update(dto);
 
-        // 4. CONVERTIR A ENTIDAD MANTENIENDO OWNER ORIGINAL
+        // 5. CONVERTIR A ENTIDAD MANTENIENDO OWNER ORIGINAL
         ProductEntity updated = product.toEntity(existing.getOwner(), categories);
         updated.setId(id); // Asegurar que mantiene el ID
 
-        // 5. PERSISTIR Y RESPONDER
+        // 6. PERSISTIR Y RESPONDER
         ProductEntity saved = productRepo.save(updated);
         return toResponseDto(saved);
     }
 
     @Override
-    public void delete(Long id) {
+    @Transactional
+    public void delete(Long id, UserDetailsImpl currentUser) {
 
         ProductEntity product = productRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("Producto no encontrado con ID: " + id));
+
+        // VALIDACIÓN DE OWNERSHIP
+        validateOwnership(product, currentUser);
 
         // Eliminación física (también se puede implementar lógica)
         productRepo.delete(product);
@@ -173,6 +185,31 @@ public class ProductServiceImpl implements ProductService {
         dto.categories = categoryDtos;
         return dto;
 
+    }
+
+    // ============== MÉTODOS DE VALIDACIÓN DE OWNERSHIP ==============
+
+    private void validateOwnership(ProductEntity product, UserDetailsImpl currentUser) {
+        // ADMIN y MODERATOR pueden modificar cualquier producto
+        if (hasAnyRole(currentUser, "ROLE_ADMIN", "ROLE_MODERATOR")) {
+            return;
+        }
+
+        // USER solo puede modificar sus propios productos
+        if (!product.getOwner().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("No puedes modificar productos ajenos");
+        }
+    }
+
+    private boolean hasAnyRole(UserDetailsImpl user, String... roles) {
+        for (String role : roles) {
+            for (GrantedAuthority authority : user.getAuthorities()) {
+                if (authority.getAuthority().equals(role)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private Set<CategoryEntity> validateAndGetCategories(Set<Long> categoryIds) {
